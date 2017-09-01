@@ -1,6 +1,6 @@
 import UIKit
 import XCTest
-import MappableObjectAlamofire
+import MappableObject_Alamofire
 
 class Tests: XCTestCase {
     
