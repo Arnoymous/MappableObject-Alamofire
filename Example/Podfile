@@ -1,0 +1,11 @@
+use_frameworks!
+
+target 'MappableObjectAlamofire_Example' do
+  pod 'MappableObjectAlamofire', :path => '../'
+
+  target 'MappableObjectAlamofire_Tests' do
+    inherit! :search_paths
+
+    
+  end
+end
