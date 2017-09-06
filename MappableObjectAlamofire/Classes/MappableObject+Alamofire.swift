@@ -84,24 +84,24 @@ extension DataRequest {
             }
             
             let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
+            let context = RealmMapContext.from(context: context, realm: realm, options: options, object: object)
+            let mapper = Mapper<T>(context: context, shouldIncludeNilValues: false)
+            let realm = try! mapper.realm ?? Realm()
             
-            let mapper: Mapper<T>
-            if let options = options {
-                mapper = Mapper<T>(context: context, realm: realm, options: options, shouldIncludeNilValues: false)
-            } else {
-                mapper = Mapper<T>(context: context, realm: realm, shouldIncludeNilValues: false)
-            }
             if var object = object {
-                do {
-                    try object.update{
-                        object = mapper.map(JSONObject: JSONObject, toObject: $0)
-                    }
-                }catch {}
+                try! realm.write {
+                    object = mapper.map(JSONObject: JSONObject, toObject: object)
+                }
                 return .success(object)
-            } else if let parsedObject = mapper.map(JSONObject: JSONObject){
-                return .success(parsedObject)
+            } else {
+                var parsedObject: T?
+                try! realm.write {
+                    parsedObject = mapper.map(JSONObject: JSONObject)
+                }
+                if let parsedObject = parsedObject {
+                    return .success(parsedObject)
+                }
             }
-            
             let failureReason = "ObjectMapper failed to serialize response."
             let error = newError(.dataSerializationFailed, failureReason: failureReason)
             return .failure(error)
@@ -142,14 +142,15 @@ extension DataRequest {
             }
             
             let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
+            let context = RealmMapContext.from(context: context, realm: realm, options: options)
+            let mapper = Mapper<T>(context: context, shouldIncludeNilValues: false)
+            let realm = try! mapper.realm ?? Realm()
             
-            let mapper: Mapper<T>
-            if let options = options {
-                mapper = Mapper<T>(context: context, realm: realm, options: options, shouldIncludeNilValues: false)
-            } else {
-                mapper = Mapper<T>(context: context, realm: realm, shouldIncludeNilValues: false)
+            var parsedObject: [T]?
+            try! realm.write {
+                parsedObject = mapper.mapArray(JSONObject: JSONObject)
             }
-            if let parsedObject = mapper.mapArray(JSONObject: JSONObject){
+            if let parsedObject = parsedObject {
                 return .success(parsedObject)
             }
             
