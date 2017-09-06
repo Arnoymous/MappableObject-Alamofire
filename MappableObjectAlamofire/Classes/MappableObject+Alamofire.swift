@@ -6,7 +6,7 @@
 //
 //  The MIT License (MIT)
 //
-//  Copyright (c) 2014-2015 Tristan Himmelman
+//  Copyright (c) 2017 Arnaud Dorgans
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
@@ -26,12 +26,11 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 //  THE SOFTWARE.
 
-
 import Foundation
-import Alamofire
-import MappableObject
 import RealmSwift
+import Alamofire
 import ObjectMapper
+import MappableObject
 
 extension DataRequest {
     
@@ -40,7 +39,7 @@ extension DataRequest {
         case dataSerializationFailed = 2
     }
     
-    private static func newError(_ code: ErrorCode, failureReason: String) -> NSError {
+    internal static func newError(_ code: ErrorCode, failureReason: String) -> NSError {
         let errorDomain = "com.alamofireobjectmapper.error"
         
         let userInfo = [NSLocalizedFailureReasonErrorKey: failureReason]
@@ -50,7 +49,7 @@ extension DataRequest {
     }
     
     /// Utility function for checking for errors in response
-    private static func checkResponseForError(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) -> Error? {
+    internal static func checkResponseForError(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) -> Error? {
         if let error = error {
             return error
         }
@@ -63,7 +62,7 @@ extension DataRequest {
     }
     
     /// Utility function for extracting JSON from response
-    private static func processResponse(request: URLRequest?, response: HTTPURLResponse?, data: Data?, keyPath: String?) -> Any? {
+    internal static func processResponse(request: URLRequest?, response: HTTPURLResponse?, data: Data?, keyPath: String?) -> Any? {
         let jsonResponseSerializer = DataRequest.jsonResponseSerializer(options: .allowFragments)
         let result = jsonResponseSerializer.serializeResponse(request, response, data, nil)
         
@@ -78,7 +77,7 @@ extension DataRequest {
     }
     
     /// MappableObject Object Serializer
-    private static func MappableObjectSerializer<T: MappableObject>(_ type: T.Type?,keyPath: String?, context: RealmMapContext?, realm: Realm?, options: RealmMapOptions?) -> DataResponseSerializer<T> {
+    internal static func ObjectMapperSerializer<T: MappableObject>(_ keyPath: String?, mapToObject object: T? = nil, context: RealmMapContext? = nil, realm: Realm?, options: RealmMapOptions?) -> DataResponseSerializer<T> {
         return DataResponseSerializer { request, response, data, error in
             if let error = checkResponseForError(request: request, response: response, data: data, error: error){
                 return .failure(error)
@@ -86,7 +85,20 @@ extension DataRequest {
             
             let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
             
-            if let parsedObject = RealmMapper.getOrCreate(type, fromJSONObject: JSONObject, context: context, realm: realm, options: options) {
+            let mapper: Mapper<T>
+            if let options = options {
+                mapper = Mapper<T>(context: context, realm: realm, options: options, shouldIncludeNilValues: false)
+            } else {
+                mapper = Mapper<T>(context: context, realm: realm, shouldIncludeNilValues: false)
+            }
+            if var object = object {
+                do {
+                    try object.update{
+                        object = mapper.map(JSONObject: JSONObject, toObject: $0)
+                    }
+                }catch {}
+                return .success(object)
+            } else if let parsedObject = mapper.map(JSONObject: JSONObject){
                 return .success(parsedObject)
             }
             
@@ -106,22 +118,24 @@ extension DataRequest {
      
      - returns: The request.
      */
+    
     @discardableResult
-    public func responseMappableObject<T: MappableObject>(_ type: T.Type? = nil, queue: DispatchQueue? = nil, keyPath: String? = nil, context: RealmMapContext? = nil, realm: Realm? = nil, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
-        return _responseMappableObject(type, queue: queue, keyPath: keyPath, context: context, realm: realm, options: nil, completionHandler: completionHandler)
+    public func responseObject<T: MappableObject>(queue: DispatchQueue? = nil, keyPath: String? = nil, mapToObject object: T? = nil, context: RealmMapContext? = nil, realm: Realm?, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
+        return responseObject(queue: queue, keyPath: keyPath, mapToObject: object, context: context, realm: realm, options: nil, completionHandler: completionHandler)
     }
     
     @discardableResult
-    public func responseMappableObject<T: MappableObject>(_ type: T.Type? = nil, queue: DispatchQueue? = nil, keyPath: String? = nil, context: RealmMapContext? = nil, realm: Realm? = nil, options: RealmMapOptions, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
-        return _responseMappableObject(type, queue: queue, keyPath: keyPath, context: context, realm: realm, options: options, completionHandler: completionHandler)
+    public func responseObject<T: MappableObject>(queue: DispatchQueue? = nil, keyPath: String? = nil, mapToObject object: T? = nil, context: RealmMapContext? = nil, realm: Realm? = nil, options: RealmMapOptions, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
+        return responseObject(queue: queue, keyPath: keyPath, mapToObject: object, context: context, realm: realm, options: options as RealmMapOptions?, completionHandler: completionHandler)
     }
     
-    private func _responseMappableObject<T: MappableObject>(_ type: T.Type? = nil, queue: DispatchQueue?, keyPath: String?, context: RealmMapContext?, realm: Realm?, options: RealmMapOptions?, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
-        return response(queue: queue, responseSerializer: DataRequest.MappableObjectSerializer(type,keyPath: keyPath, context: context, realm: realm, options: options), completionHandler: completionHandler)
+    @discardableResult
+    internal func responseObject<T: MappableObject>(queue: DispatchQueue?, keyPath: String?, mapToObject object: T?, context: RealmMapContext?, realm: Realm?, options: RealmMapOptions?, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
+        return response(queue: queue, responseSerializer: DataRequest.ObjectMapperSerializer(keyPath, mapToObject: object, context: context, realm: realm, options: options), completionHandler: completionHandler)
     }
     
     /// MappableObject Array Serializer
-    private static func MappableObjectArraySerializer<T: MappableObject>(_ type: T.Type?, keyPath: String?, context: RealmMapContext? = nil, realm: Realm?, options: RealmMapOptions?) -> DataResponseSerializer<[T]> {
+    internal static func ObjectMapperArraySerializer<T: MappableObject>(_ keyPath: String?, context: RealmMapContext? = nil, realm: Realm?, options: RealmMapOptions?) -> DataResponseSerializer<[T]> {
         return DataResponseSerializer { request, response, data, error in
             if let error = checkResponseForError(request: request, response: response, data: data, error: error){
                 return .failure(error)
@@ -129,8 +143,14 @@ extension DataRequest {
             
             let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
             
-            if let list = RealmMapper.getOrCreateList(type, fromJSONObject: JSONObject, context: context, realm: realm, options: options) {
-                return .success(Array(list))
+            let mapper: Mapper<T>
+            if let options = options {
+                mapper = Mapper<T>(context: context, realm: realm, options: options, shouldIncludeNilValues: false)
+            } else {
+                mapper = Mapper<T>(context: context, realm: realm, shouldIncludeNilValues: false)
+            }
+            if let parsedObject = mapper.mapArray(JSONObject: JSONObject){
+                return .success(parsedObject)
             }
             
             let failureReason = "ObjectMapper failed to serialize response."
@@ -148,18 +168,20 @@ extension DataRequest {
      
      - returns: The request.
      */
-    @discardableResult
-    public func responseMappableArray<T: MappableObject>(_ type: T.Type? = nil, queue: DispatchQueue? = nil, keyPath: String? = nil, context: RealmMapContext? = nil, realm: Realm? = nil, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
-        return _responseMappableArray(type, queue: queue, keyPath: keyPath, context: context, realm: realm, options: nil, completionHandler: completionHandler)
-    }
     
     @discardableResult
-    public func responseMappableArray<T: MappableObject>(_ type: T.Type? = nil, queue: DispatchQueue? = nil, keyPath: String? = nil, context: RealmMapContext? = nil, realm: Realm? = nil, options: RealmMapOptions, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
-        return _responseMappableArray(type, queue: queue, keyPath: keyPath, context: context, realm: realm, options: options, completionHandler: completionHandler)
+    public func responseArray<T: MappableObject>(queue: DispatchQueue? = nil, keyPath: String? = nil, context: RealmMapContext? = nil, realm: Realm?, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
+        return responseArray(queue: queue, keyPath: keyPath, context: context, realm: realm, options: nil, completionHandler: completionHandler)
     }
     
-    private func _responseMappableArray<T: MappableObject>(_ type: T.Type? = nil, queue: DispatchQueue?, keyPath: String?, context: RealmMapContext?, realm: Realm?, options: RealmMapOptions?, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
-        return response(queue: queue, responseSerializer: DataRequest.MappableObjectArraySerializer(type, keyPath: keyPath, context: context, realm: realm, options: options), completionHandler: completionHandler)
+    @discardableResult
+    public func responseArray<T: MappableObject>(queue: DispatchQueue? = nil, keyPath: String? = nil, context: RealmMapContext? = nil, realm: Realm? = nil, options: RealmMapOptions, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
+        return responseArray(queue: queue, keyPath: keyPath, context: context, realm: realm, options: options as RealmMapOptions?, completionHandler: completionHandler)
     }
     
+    @discardableResult
+    internal func responseArray<T: MappableObject>(queue: DispatchQueue?, keyPath: String?, context: RealmMapContext?, realm: Realm?, options: RealmMapOptions?, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
+        let responseSerializer: DataResponseSerializer<[T]> = DataRequest.ObjectMapperArraySerializer(keyPath, context: context, realm: realm, options: options)
+        return response(queue: queue, responseSerializer: responseSerializer, completionHandler: completionHandler)
+    }
 }
