@@ -1,11 +1,11 @@
 PODS:
   - Alamofire (4.5.1)
-  - MappableObject (0.3.3):
+  - MappableObject (0.3.8):
     - ObjectMapper (~> 2.2)
     - RealmSwift (~> 2.10.0)
-  - MappableObject+Alamofire (0.3.1):
+  - MappableObject+Alamofire (0.3.2):
     - Alamofire (~> 4.5.0)
-    - MappableObject (~> 0.3.3)
+    - MappableObject (~> 0.3.8)
   - ObjectMapper (2.2.8)
   - Realm (2.10.0):
     - Realm/Headers (= 2.10.0)
@@ -22,8 +22,8 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Alamofire: 2d95912bf4c34f164fdfc335872e8c312acaea4a
-  MappableObject: dfd575094af5da7f51d8e84a1ebecf6926ff72b1
-  MappableObject+Alamofire: eed26e7a97fda63afbe8ee3c540d2350bc588c4a
+  MappableObject: fd997e27a7e2bfd50714e2ec5c8b2008f640850d
+  MappableObject+Alamofire: 4fa0ff5e19be5f94f27bf81ffa343d854d8f8493
   ObjectMapper: 3d571bb5af471c779e1160828cd9ad5c4ef90958
   Realm: 98b3a25643cf6b3e07d2b99fb43fe0eb9c801dec
   RealmSwift: 34073ad3a31232bbaf7c0db898c037940284cba2
